@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>WebSocket 客户端</title>
+  <!-- <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.2.47/vue.cjs.min.js"></script> -->
+  <script src="https://unpkg.com/vue@3.0.11/dist/vue.global.js"></script>
+  
+</head>
+<body>
+  <div id="container" >
+    <h6 v-for="item in list"><i>{{item.timestamp}}</i>&nbsp;&nbsp; {{item.msg}}</h6>
+    <input  v-model="model.inputContent" type="text">
+    <button @click="send">发送</button>
+  </div>
+</body>
+<script>
+  const getIP = (callback)=>{
+      // 使用 WebRTC 获取 IP 地址
+      const peerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+      const sessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
+      const iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] };
+      const pc = new peerConnection(iceServers);
+
+      pc.createDataChannel("");
+
+      pc.createOffer(function(sdp) {
+        pc.setLocalDescription(new sessionDescription(sdp), function() {}, function() {});
+      }, function() {});
+
+      pc.onicecandidate = function(event) {
+        if (event && event.candidate && event.candidate.candidate) {
+          const ip = event.candidate.candidate.split(" ")[4];
+          callback(ip);
+        }
+      };
+    }
+  const { ref, reactive, onMounted } = Vue;
+  const app = Vue.createApp({
+    setup(){
+      const list = ref([
+        'websocket链接'
+      ]);
+      const model = reactive({
+        ip: '',
+        randstr: '',
+        inputContent: '',
+      })
+      
+      const ws = ref(null);
+      const send = () => {
+        if(!ws.value) {
+          pushData('发送失败 尝试重连');
+          initWebSocket();
+          return
+        }
+        pushData('你：'+model.inputContent);
+        ws.value.send(JSON.stringify({
+          ip: model.ip,
+          randstr: model.randstr,
+          content: model.inputContent,
+          timestamp: getNowStr(),
+        }));
+        model.inputContent = ''
+      }
+      const pushData = (msg)=>{
+        list.value.push({
+          msg,
+          timestamp: getNowStr(),
+        });
+      }
+      onMounted(()=>{
+        initIP();
+        initWebSocket();
+      })
+      const initIP = () => {
+        getIP((ip)=>{
+          model.ip = ip
+          model.randstr = Math.random().toString(36).substr(2)
+        })
+      }
+      const initWebSocket = () => {
+        ws.value = new WebSocket("ws://127.0.0.212:8000"); 
+        ws.value.onmessage = function(event) {
+          pushData(event.data);
+          console.log("接收到服务器消息: " + event.data);
+        };
+        ws.value.onopen = function(event) {
+          pushData('链接已经建立')
+          console.log("链接已经建立");
+        };
+        // 接收服务器消息时触发
+        ws.value.onmessage = function(event) {
+
+          let data = jsondecode(event.data)
+          pushData(`${data.randstr}:${data.content}`)
+          console.log("接收到服务器消息: " + event.data);
+        };
+        ws.value.onclose = function(event) {
+          pushData('断开链接')
+          ws.value = null;
+          console.log("断开链接");
+        };
+      }
+      const getNowStr = ()=>{
+        var timestamp = new Date(); // 示例时间戳
+        var date = new Date(timestamp);
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      const jsondecode = (str)=>{
+        try {
+          return JSON.parse(str);
+        } catch (error) {
+          return false;
+        }
+      }
+      return {
+        send,
+        list,
+        model,
+      }
+    },
+  });
+  app.mount('#container');
+
+
+  
+</script>
+</html>
