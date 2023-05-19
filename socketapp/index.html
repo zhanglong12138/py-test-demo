@@ -14,118 +14,187 @@
   </div>
 </body>
 <script>
-  const getIP = (callback)=>{
-      // 使用 WebRTC 获取 IP 地址
-      const peerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
-      const sessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
-      const iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] };
-      const pc = new peerConnection(iceServers);
+//获取当前时间
+const getNowStr = ()=>{
+  var timestamp = new Date(); // 示例时间戳
+  var date = new Date(timestamp);
+  var year = date.getFullYear();
+  var month = String(date.getMonth() + 1).padStart(2, '0');
+  var day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+//json解析
+const jsondecode = (str)=>{
+  try {
+    return JSON.parse(str);
+  } catch (error) {
+    return false;
+  }
+}
+//允许输入的按键数组
+const actionCodeArr = {
+  "87":"w",
+  "38":"up",
+  "83":"s",
+  "40":"down",
+  "65":"a",
+  "37":"left",
+  "68":"d",
+  "39":"right",
+  "75":"k",
+  "74":"j",
+  "76":"l",
+  "85":"u",
+  "73":"i",
+  "79":"o",
 
-      pc.createDataChannel("");
+  "32":"space",
+  "66":"b",
+  "77":"m",
+  "81":"q",
+}
 
-      pc.createOffer(function(sdp) {
-        pc.setLocalDescription(new sessionDescription(sdp), function() {}, function() {});
-      }, function() {});
-
-      pc.onicecandidate = function(event) {
-        if (event && event.candidate && event.candidate.candidate) {
-          const ip = event.candidate.candidate.split(" ")[4];
-          callback(ip);
-        }
+//获取IP
+const getIP = (callback)=>{
+  // 使用 WebRTC 获取 IP 地址
+  const peerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
+  const sessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription;
+  const iceServers = { iceServers: [{ urls: "stun:stun.services.mozilla.com" }] };
+  const pc = new peerConnection(iceServers);
+  pc.createDataChannel("");
+  pc.createOffer(function(sdp) {
+    pc.setLocalDescription(new sessionDescription(sdp), function() {}, function() {});
+  }, function() {});
+  pc.onicecandidate = function(event) {
+    if (event && event.candidate && event.candidate.candidate) {
+      const ip = event.candidate.candidate.split(" ")[4];
+      callback(ip);
+    }
+  };
+}
+const { ref, reactive, onMounted } = Vue;
+const app = Vue.createApp({
+  setup(){
+    const ws = ref(null);
+    const list = ref([]);
+    const model = reactive({
+      ip: '',
+      randstr: '',
+      inputContent: '',
+    })
+    //发送消息到服务器
+    const send = () => {
+      if(!ws.value) {
+        pushData('发送失败 尝试重连');
+        initWebSocket();
+        return
+      }
+      pushData('你：'+model.inputContent);
+      ws.value.send(JSON.stringify({
+        ip: model.ip,
+        randstr: model.randstr,
+        content: model.inputContent,
+        timestamp: getNowStr(),
+      }));
+      model.inputContent = ''
+    }
+    //添加日志
+    const pushData = (msg)=>{
+      list.value.push({
+        msg,
+        timestamp: getNowStr(),
+      });
+    }
+    onMounted(()=>{
+      initIP();
+      initWebSocket();
+      initActionListener()
+    })
+    //设置监听键盘事件
+    const initActionListener = ()=>{
+      window.onkeydown = function (e) {
+        keyDownAction(e.keyCode)
       };
     }
-  const { ref, reactive, onMounted } = Vue;
-  const app = Vue.createApp({
-    setup(){
-      const list = ref([
-        'websocket链接'
-      ]);
-      const model = reactive({
-        ip: '',
-        randstr: '',
-        inputContent: '',
+    //初始化IP及用户标识
+    const initIP = () => {
+      getIP((ip)=>{
+        model.ip = ip
+        model.randstr = Math.random().toString(36).substr(2)
       })
-      
-      const ws = ref(null);
-      const send = () => {
-        if(!ws.value) {
-          pushData('发送失败 尝试重连');
-          initWebSocket();
-          return
-        }
-        pushData('你：'+model.inputContent);
-        ws.value.send(JSON.stringify({
-          ip: model.ip,
-          randstr: model.randstr,
-          content: model.inputContent,
-          timestamp: getNowStr(),
-        }));
-        model.inputContent = ''
-      }
-      const pushData = (msg)=>{
-        list.value.push({
-          msg,
-          timestamp: getNowStr(),
-        });
-      }
-      onMounted(()=>{
-        initIP();
-        initWebSocket();
-      })
-      const initIP = () => {
-        getIP((ip)=>{
-          model.ip = ip
-          model.randstr = Math.random().toString(36).substr(2)
-        })
-      }
-      const initWebSocket = () => {
-        ws.value = new WebSocket("ws://127.0.0.212:8000"); 
-        ws.value.onmessage = function(event) {
-          pushData(event.data);
-          console.log("接收到服务器消息: " + event.data);
-        };
-        ws.value.onopen = function(event) {
-          pushData('链接已经建立')
-          console.log("链接已经建立");
-        };
-        // 接收服务器消息时触发
-        ws.value.onmessage = function(event) {
+    }
+    //初始化websocket
+    const initWebSocket = () => {
+      ws.value = new WebSocket("ws://127.0.0.1:8000"); 
+      ws.value.onmessage = function(event) {
+        pushData(event.data);
+        console.log("接收到服务器消息: " + event.data);
+      };
+      ws.value.onopen = function(event) {
+        pushData('链接已经建立')
+        console.log("链接已经建立");
+      };
+      // 接收服务器消息时触发
+      ws.value.onmessage = function(event) {
 
-          let data = jsondecode(event.data)
-          pushData(`${data.randstr}:${data.content}`)
-          console.log("接收到服务器消息: " + event.data);
-        };
-        ws.value.onclose = function(event) {
-          pushData('断开链接')
-          ws.value = null;
-          console.log("断开链接");
-        };
+        let data = jsondecode(event.data)
+        pushData(`${data.randstr}:${data.content}`)
+        console.log("接收到服务器消息: " + event.data);
+      };
+      ws.value.onclose = function(event) {
+        pushData('断开链接')
+        ws.value = null;
+        console.log("断开链接");
+      };
+    }
+    //按键动作
+    const keyDownAction = (code)=>{
+      console.log(code)
+      if(!actionCodeArr?.[code]){
+        return
       }
-      const getNowStr = ()=>{
-        var timestamp = new Date(); // 示例时间戳
-        var date = new Date(timestamp);
-        var year = date.getFullYear();
-        var month = String(date.getMonth() + 1).padStart(2, '0');
-        var day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-      }
-      const jsondecode = (str)=>{
-        try {
-          return JSON.parse(str);
-        } catch (error) {
-          return false;
+      let actionEvent = actionCodeArr[code]
+      switch(actionEvent){
+        case 'w':
+        case 'up':{
+          console.log('上')
+          break;
+        }
+        case 's':
+        case 'down':{
+          console.log('下')
+          break;
+        }
+        case 'a':
+        case 'left':{
+          console.log('左')
+          break;
+        }
+        case 'd':
+        case 'right':{
+          console.log('右')
+          break;
+        }
+        case 'right':{
+          console.log('右')
+          break;
+        }
+        case 'right':{
+          console.log('右')
+          break;
+        }
+        default:{
+          break;
         }
       }
-      return {
-        send,
-        list,
-        model,
-      }
-    },
-  });
-  app.mount('#container');
-
-
-  
+    }
+    return {
+      send,
+      list,
+      model,
+    }
+  },
+});
+app.mount('#container');
 </script>
 </html>

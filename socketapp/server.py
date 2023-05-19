@@ -1,13 +1,13 @@
-import logging
-# 配置日志记录
-logging.basicConfig(
-    level=logging.DEBUG,  # 设置日志级别为DEBUG
-    format='%(asctime)s - %(levelname)s - %(message)s',  # 设置日志格式
-    filename='app.log',  # 指定日志文件名
-    filemode='w'  # 指定日志文件的打开模式（此处为覆盖写入）
-)
-# 创建Logger对象
-logger = logging.getLogger('log')
+# import logging
+# # 配置日志记录
+# logging.basicConfig(
+#     level=logging.DEBUG,  # 设置日志级别为DEBUG
+#     format='%(asctime)s - %(levelname)s - %(message)s',  # 设置日志格式
+#     filename='app.log',  # 指定日志文件名
+#     filemode='w'  # 指定日志文件的打开模式（此处为覆盖写入）
+# )
+# # 创建Logger对象
+# logger = logging.getLogger('log')
 #--------------------------------------------
 
 import asyncio
@@ -52,7 +52,7 @@ async def broadcast(message,websocket):
 
 # 启动WebSocket服务器
 async def start_server():
-    async with websockets.serve(handle_connection, "localhost", 8000):
+    async with websockets.serve(handle_connection, "127.0.0.1", 8000):
         await asyncio.Future()  # 保持服务器运行，直到显式取消
 
 # 运行WebSocket服务器
